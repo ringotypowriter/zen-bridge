@@ -2,38 +2,30 @@
 
 Control Zen Browser (and other Firefox-based browsers) from the command line or any WebSocket client.
 
-Zen Bridge is a three-piece system:
-
-1. **Extension** (`extension/`) — a Firefox WebExtension that runs inside the browser, exposing tabs, DOM, screenshots, and interactions.
-2. **Server** (`extension/server/`) — a Node process launched by the extension via Native Messaging; it bridges the browser's internal protocol to a local WebSocket.
-3. **Connector** (`connector/`) — a CLI tool (and reusable WebSocket client) that talks to the server.
-
 ## Quick Start
 
 ### 1. Install the browser extension
 
 Download the latest signed `.xpi` from [GitHub Releases](https://github.com/ringotypowriter/zen-bridge/releases) and drag it into Zen. Or install from [AMO](https://addons.mozilla.org/) once listed.
 
-### 2. Register the Native Messaging host
+### 2. Install the Native Messaging host
+
+The extension will automatically open a setup page if the host is missing. Run one command:
 
 ```bash
-git clone https://github.com/ringotypowriter/zen-bridge.git
-cd zen-bridge/extension/server
-npm install
-node install.js
+curl -fsSL https://github.com/ringotypowriter/zen-bridge/releases/latest/download/install.sh | bash
 ```
 
-This creates a small shell wrapper and drops the Native Messaging host manifest into the browser's config directory so the extension can spawn the server.
+Or download the platform-specific binary from the release page and run `install.sh` locally.
+
+Then restart Zen or reload the extension.
 
 ### 3. Install the CLI
 
 ```bash
-cd ../../connector
-npm install
-npm link   # or add ./bin to your PATH
+npm install -g zen-bridge-connector
+# or clone and npm link
 ```
-
-The extension auto-launches the server when Zen starts. The server writes its WebSocket port to `~/.zen-bridge-port`.
 
 ### 4. Use it
 
@@ -47,16 +39,18 @@ zen-bridge runjs --tab 42 --code "document.title"
 
 ## Architecture
 
+Zen Bridge is a three-piece system:
+
+1. **Extension** (`extension/`) — Firefox WebExtension that exposes tabs, DOM, screenshots, and interactions.
+2. **Server** (`extension/server/`) — Native host launched by the extension. Bridges the browser's internal protocol to a local WebSocket.
+3. **Connector** (`connector/`) — CLI tool and reusable WebSocket client.
+
 ```
 ┌─────────────┐     Native Messaging      ┌──────────────┐     WebSocket      ┌─────────────┐
 │   Browser   │ ←───────────────────────→ │  Server      │ ←───────────────→ │  Connector  │
-│ Extension   │   (stdio, length-prefixed)│  (Node)      │                  │  (CLI)      │
+│ Extension   │   (stdio, length-prefixed)│  (binary)    │                  │  (CLI)      │
 └─────────────┘                           └──────────────┘                  └─────────────┘
 ```
-
-- The extension holds all browser state and permissions.
-- The server is stateless; it only forwards messages between the extension and WebSocket clients.
-- The connector is a pure WebSocket client; you can replace it with any language.
 
 ## Project Layout
 
@@ -67,9 +61,11 @@ zen-bridge/
 │   ├── background.js
 │   ├── content.js
 │   ├── axtree.js
-│   └── server/         # Native Messaging → WebSocket bridge
-│       ├── install.js
+│   ├── onboarding.html
+│   ├── onboarding.js
+│   └── server/         # Native Messaging host source
 │       ├── package.json
+│       ├── install.js
 │       └── src/
 │           ├── host.js
 │           ├── server.js
@@ -77,9 +73,10 @@ zen-bridge/
 ├── connector/          # CLI / WebSocket client
 │   ├── package.json
 │   └── bin/zen-bridge
+├── install.sh          # One-line host installer
 └── skills/
     └── zen-browser/
-        └── SKILL.md    # Agent skill instructions
+        └── SKILL.md
 ```
 
 ## Protocol
@@ -93,7 +90,7 @@ All messages are JSON over WebSocket.
 | Action | Description |
 |--------|-------------|
 | `tabs` | List all tabs |
-| `screenshot` | Capture visible viewport as base64 PNG |
+| `screenshot` | Capture visible viewport as PNG file |
 | `axtree` | Get simplified accessible DOM tree |
 | `click` | Click element by `ref` |
 | `scroll` | Scroll by `(x, y)` pixels |
