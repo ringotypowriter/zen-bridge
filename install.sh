@@ -25,9 +25,21 @@ echo "→ Installing Zen Bridge host for ${PLATFORM}..."
 
 mkdir -p "${INSTALL_DIR}"
 
-# Download binary
-curl -fsSL -o "${INSTALL_DIR}/zen-bridge-server" "${LATEST_URL}"
-chmod +x "${INSTALL_DIR}/zen-bridge-server"
+# Download binary to temp first, then verify it runs
+curl -fsSL -o "${INSTALL_DIR}/.zen-bridge-server.tmp" "${LATEST_URL}"
+chmod +x "${INSTALL_DIR}/.zen-bridge-server.tmp"
+
+# Sanity check: the binary must be able to print its startup line
+if ! "${INSTALL_DIR}/.zen-bridge-server.tmp" --help 2>/dev/null | grep -q "Zen Bridge"; then
+  # Some pkg binaries don't have --help; try a quick stdin test
+  if ! echo '{"id":"x","action":"ping"}' | timeout 2 "${INSTALL_DIR}/.zen-bridge-server.tmp" 2>/dev/null | head -c 1 | grep -q '.'; then
+    echo "Downloaded binary appears broken or incomplete. Try again in 30s."
+    rm -f "${INSTALL_DIR}/.zen-bridge-server.tmp"
+    exit 1
+  fi
+fi
+
+mv "${INSTALL_DIR}/.zen-bridge-server.tmp" "${INSTALL_DIR}/zen-bridge-server"
 
 # Install host manifest
 MANIFEST_NAME="zen_bridge.json"
