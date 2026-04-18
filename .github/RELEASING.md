@@ -19,8 +19,8 @@ Add these in your repo's Settings → Secrets and variables → Actions:
 
 | Secret | Description |
 |--------|-------------|
-| `AMO_API_KEY` | JWT issuer from AMO developer profile |
-| `AMO_API_SECRET` | JWT secret from AMO developer profile |
+| `WEB_EXT_API_KEY` | JWT issuer from AMO developer profile |
+| `WEB_EXT_API_SECRET` | JWT secret from AMO developer profile |
 
 Get them at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/).
 
@@ -31,8 +31,8 @@ If you need to sign locally:
 ```bash
 cd extension
 npm install
-export AMO_API_KEY=your-key
-export AMO_API_SECRET=your-secret
+export WEB_EXT_API_KEY="your-jwt-issuer"
+export WEB_EXT_API_SECRET="your-jwt-secret"
 npx web-ext sign
 ```
 
