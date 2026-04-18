@@ -16,7 +16,16 @@ The extension will automatically open a setup page if the host is missing. Run o
 curl -fsSL https://github.com/ringotypowriter/zen-bridge/releases/latest/download/install.sh | bash
 ```
 
-Or download the platform-specific binary from the release page and run `install.sh` locally.
+Or download the platform-specific **Bun-compiled** binary from the release page and run `install.sh` locally.
+
+### Building the host binary from source
+
+Requires [Bun](https://bun.sh):
+
+```bash
+cd extension/server
+bun build --compile src/host.js --outfile zen-bridge-server
+```
 
 Then restart Zen or reload the extension.
 
@@ -42,7 +51,7 @@ zen-bridge runjs --tab 42 --code "document.title"
 Zen Bridge is a three-piece system:
 
 1. **Extension** (`extension/`) — Firefox WebExtension that exposes tabs, DOM, screenshots, and interactions.
-2. **Server** (`extension/server/`) — Native host launched by the extension. Bridges the browser's internal protocol to a local WebSocket.
+2. **Server** (`extension/server/`) — Native host launched by the extension. Bridges the browser's internal protocol to a local WebSocket. Compiled with **Bun** (`bun build --compile`) into a single self-contained binary.
 3. **Connector** (`connector/`) — CLI tool and reusable WebSocket client.
 
 ```

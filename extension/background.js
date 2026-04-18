@@ -1,6 +1,125 @@
 let PORT = null;
 let ONBOARDING_OPENED = false;
 let CONNECT_ATTEMPTS = 0;
+const CONTENT_SCRIPT_FILES = ['axtree.js', 'content.js'];
+const RECEIVING_END_MISSING = 'Could not establish connection. Receiving end does not exist.';
+
+function normalizeTabMessageError(error) {
+  const message = error?.message || String(error);
+
+  if (message.includes(RECEIVING_END_MISSING)) {
+    return 'This tab does not allow Zen Bridge page scripts. Try a normal http(s) page instead of browser-internal pages like about:addons or about:debugging.';
+  }
+
+  return message;
+}
+
+function toErrorResponse(error) {
+  return { ok: false, error: normalizeTabMessageError(error) };
+}
+
+function injectContentScripts(tabsApi, tabId) {
+  return CONTENT_SCRIPT_FILES.reduce(
+    (promise, file) => promise.then(() => tabsApi.executeScript(tabId, { file })),
+    Promise.resolve(),
+  );
+}
+
+function injectAXTreeScript(tabsApi, tabId) {
+  return tabsApi.executeScript(tabId, { file: 'axtree.js' });
+}
+
+function ensureTabReadyForScript(tabsApi, tabId) {
+  if (typeof tabsApi.get !== 'function') {
+    return Promise.resolve(null);
+  }
+
+  return tabsApi.get(tabId).then(tab => {
+    console.log('[zen-bridge] target tab state:', JSON.stringify({
+      id: tab.id,
+      active: tab.active,
+      status: tab.status,
+      discarded: tab.discarded,
+      hidden: tab.hidden,
+      url: tab.url,
+    }));
+
+    if (tab.active || typeof tabsApi.update !== 'function') {
+      return tab;
+    }
+
+    console.log('[zen-bridge] activating tab for script execution:', tabId);
+    return tabsApi.update(tabId, { active: true });
+  });
+}
+
+function buildAXTreeCode(payload = {}) {
+  const encodedPayload = JSON.stringify(payload);
+  return `(() => {
+    const logs = [];
+    const result = window.getAXTree(document.body, {
+      ...${encodedPayload},
+      logger: entry => logs.push(entry),
+    });
+    return { result, logs };
+  })();`;
+}
+
+function executeAXTree(tabsApi, msg, reply) {
+  return ensureTabReadyForScript(tabsApi, msg.tabId).then(
+    () => injectAXTreeScript(tabsApi, msg.tabId).then(
+      () => tabsApi.executeScript(msg.tabId, { code: buildAXTreeCode(msg.payload) }).then(
+        result => {
+          const payload = result[0] || { result: [], logs: [] };
+          for (const entry of payload.logs || []) {
+            console.log('[zen-bridge] axtree log:', JSON.stringify(entry));
+          }
+
+          const response = { ok: true, result: payload.result };
+          reply(response);
+          return response;
+        },
+        error => {
+          const response = toErrorResponse(error);
+          reply(response);
+          return response;
+        },
+      ),
+    ),
+    error => {
+      const response = toErrorResponse(error);
+      reply(response);
+      return response;
+    },
+  );
+}
+
+function relayTabMessage(tabsApi, msg, reply) {
+  return tabsApi.sendMessage(msg.tabId, msg).then(
+    result => {
+      reply(result);
+      return result;
+    },
+    () => injectContentScripts(tabsApi, msg.tabId).then(
+      () => tabsApi.sendMessage(msg.tabId, msg).then(
+        result => {
+          reply(result);
+          return result;
+        },
+        error => {
+          const response = toErrorResponse(error);
+          reply(response);
+          return response;
+        },
+      ),
+      error => {
+        const response = toErrorResponse(error);
+        reply(response);
+        return response;
+      },
+    ),
+  );
+}
 
 function connect() {
   console.log('[zen-bridge] connect() called, PORT=', PORT);
@@ -53,17 +172,12 @@ function connect() {
       );
       return;
     }
-    browser.tabs.sendMessage(msg.tabId, msg).then(
-      res => reply(res),
-      err => {
-        browser.tabs.executeScript(msg.tabId, { file: 'content.js' }).then(() =>
-          browser.tabs.sendMessage(msg.tabId, msg).then(
-            res2 => reply(res2),
-            err2 => reply({ ok: false, error: err2.message })
-          )
-        );
-      }
-    );
+    if (msg.action === 'axtree') {
+      console.log('[zen-bridge] running axtree directly in tab', msg.tabId);
+      executeAXTree(browser.tabs, msg, reply);
+      return;
+    }
+    relayTabMessage(browser.tabs, msg, reply);
   });
 
   PORT.onDisconnect.addListener(() => {
@@ -93,15 +207,31 @@ function maybeOpenOnboarding() {
   browser.tabs.create({ url: browser.runtime.getURL('onboarding.html') });
 }
 
-browser.runtime.onMessage.addListener((msg, sender) => {
-  console.log('[zen-bridge] runtime.onMessage:', msg);
-  if (msg.action === 'status') {
-    return Promise.resolve({ connected: !!PORT });
-  }
-});
+if (typeof browser !== 'undefined') {
+  browser.runtime.onMessage.addListener((msg, sender) => {
+    console.log('[zen-bridge] runtime.onMessage:', msg);
+    if (msg.action === 'status') {
+      return Promise.resolve({ connected: !!PORT });
+    }
+  });
+}
 
-console.log('[zen-bridge] background.js loading');
-browser.runtime.onInstalled.addListener(() => { console.log('[zen-bridge] onInstalled'); connect(); });
-browser.runtime.onStartup.addListener(() => { console.log('[zen-bridge] onStartup'); connect(); });
-connect();
-console.log('[zen-bridge] background.js loaded');
+if (typeof module !== 'undefined') {
+  module.exports = {
+    buildAXTreeCode,
+    CONTENT_SCRIPT_FILES,
+    ensureTabReadyForScript,
+    executeAXTree,
+    injectAXTreeScript,
+    injectContentScripts,
+    normalizeTabMessageError,
+    relayTabMessage,
+    toErrorResponse,
+  };
+} else {
+  console.log('[zen-bridge] background.js loading');
+  browser.runtime.onInstalled.addListener(() => { console.log('[zen-bridge] onInstalled'); connect(); });
+  browser.runtime.onStartup.addListener(() => { console.log('[zen-bridge] onStartup'); connect(); });
+  connect();
+  console.log('[zen-bridge] background.js loaded');
+}
