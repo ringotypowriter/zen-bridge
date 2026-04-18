@@ -16,6 +16,10 @@
     }
   ],
   "permissions": ["tabs", "activeTab", "<all_urls>", "nativeMessaging", "downloads"],
+  "browser_action": {
+    "default_title": "Zen Bridge",
+    "default_popup": "onboarding.html"
+  },
   "web_accessible_resources": ["onboarding.html", "onboarding.js"],
   "browser_specific_settings": {
     "gecko": {
