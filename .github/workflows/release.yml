@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  sign:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,7 +23,7 @@ jobs:
           cd extension
           npm install
 
-      - name: Sign with AMO
+      - name: Sign extension with AMO
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
@@ -31,15 +31,31 @@ jobs:
           cd extension
           npx web-ext sign
 
-      - name: Upload artifact
+      - name: Install server deps
+        run: |
+          cd extension/server
+          npm install
+
+      - name: Build server binaries
+        run: |
+          cd extension/server
+          npx pkg . --targets node18-macos-arm64,node18-macos-x64,node18-linux-x64 --out-path ../../dist
+
+      - name: Copy install script
+        run: |
+          cp install.sh dist/install.sh
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: zen-bridge-xpi
-          path: extension/dist/*.xpi
+          name: zen-bridge-release
+          path: dist/*
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: extension/dist/*.xpi
+          files: |
+            extension/dist/*.xpi
+            dist/*
           generate_release_notes: true
