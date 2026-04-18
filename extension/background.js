@@ -2,37 +2,48 @@ let PORT = null;
 let ONBOARDING_OPENED = false;
 
 function connect() {
-  PORT = chrome.runtime.connectNative('zen_bridge');
+  PORT = browser.runtime.connectNative('zen_bridge');
   console.log('[zen-bridge] connected');
 
   PORT.onMessage.addListener(msg => {
     const reply = o => { try { PORT.postMessage({ id: msg.id, ...o }); } catch(e) {} };
 
     if (msg.action === 'tabs') {
-      chrome.tabs.query({}, tabs => reply({
+      browser.tabs.query({}).then(tabs => reply({
         ok: true,
         result: tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active, windowId: t.windowId }))
       }));
       return;
     }
     if (msg.action === 'screenshot') {
-      chrome.tabs.captureVisibleTab(msg.windowId || chrome.windows.WINDOW_ID_CURRENT, { format: 'png' }, dataUrl =>
-        reply(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : { ok: true, result: dataUrl })
+      browser.tabs.captureVisibleTab(msg.windowId || browser.windows.WINDOW_ID_CURRENT, { format: 'png' }).then(dataUrl =>
+        reply({ ok: true, result: dataUrl }),
+        err => reply({ ok: false, error: err.message })
       );
       return;
     }
-    chrome.tabs.sendMessage(msg.tabId, msg, res => {
-      if (!chrome.runtime.lastError) { reply(res); return; }
-      chrome.tabs.executeScript(msg.tabId, { file: 'content.js' }, () => {
-        chrome.tabs.sendMessage(msg.tabId, msg, res2 =>
-          reply(chrome.runtime.lastError ? { ok: false, error: chrome.runtime.lastError.message } : res2)
+    if (msg.action === 'runjs') {
+      browser.tabs.executeScript(msg.tabId, { code: msg.payload?.code || '' }).then(
+        results => reply({ ok: true, result: results[0] }),
+        err => reply({ ok: false, error: err.message })
+      );
+      return;
+    }
+    browser.tabs.sendMessage(msg.tabId, msg).then(
+      res => reply(res),
+      err => {
+        browser.tabs.executeScript(msg.tabId, { file: 'content.js' }).then(() =>
+          browser.tabs.sendMessage(msg.tabId, msg).then(
+            res2 => reply(res2),
+            err2 => reply({ ok: false, error: err2.message })
+          )
         );
-      });
-    });
+      }
+    );
   });
 
   PORT.onDisconnect.addListener(() => {
-    console.error('[zen-bridge] disconnected:', chrome.runtime.lastError?.message);
+    console.error('[zen-bridge] disconnected:', browser.runtime.lastError?.message);
     PORT = null;
     setTimeout(connect, 2000);
   });
@@ -41,12 +52,12 @@ function connect() {
 function openOnboarding() {
   if (ONBOARDING_OPENED) return;
   ONBOARDING_OPENED = true;
-  chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+  browser.tabs.create({ url: browser.runtime.getURL('onboarding.html') });
 }
 
 function probe() {
   try {
-    const p = chrome.runtime.connectNative('zen_bridge');
+    const p = browser.runtime.connectNative('zen_bridge');
     p.onDisconnect.addListener(() => {
       openOnboarding();
     });
@@ -58,6 +69,6 @@ function probe() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(probe);
-chrome.runtime.onStartup.addListener(probe);
+browser.runtime.onInstalled.addListener(probe);
+browser.runtime.onStartup.addListener(probe);
 probe();
