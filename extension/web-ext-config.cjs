@@ -9,8 +9,8 @@ module.exports = {
     startUrl: ['about:debugging'],
   },
   sign: {
-    apiKey: process.env.AMO_API_KEY,
-    apiSecret: process.env.AMO_API_SECRET,
-    id: 'zen-bridge@yachiyo.local',
+    apiKey: process.env.WEB_EXT_API_KEY,
+    apiSecret: process.env.WEB_EXT_API_SECRET,
+    channel: 'unlisted',
   },
 };
