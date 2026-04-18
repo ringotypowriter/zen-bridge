@@ -6,8 +6,11 @@ const {
   CONTENT_SCRIPT_FILES,
   ensureTabReadyForScript,
   executeAXTree,
+  isKeepAliveResponse,
   normalizeTabMessageError,
   relayTabMessage,
+  startNativeKeepAlive,
+  shouldOpenOnboardingForDisconnect,
 } = require('../background.js');
 
 test('axtree fallback injects both content scripts before retrying', async () => {
@@ -68,6 +71,11 @@ test('receiving-end errors are rewritten into a restricted-tab message', () => {
     normalizeTabMessageError(new Error('Could not establish connection. Receiving end does not exist.')),
     'This tab does not allow Zen Bridge page scripts. Try a normal http(s) page instead of browser-internal pages like about:addons or about:debugging.',
   );
+});
+
+test('empty disconnect messages do not trigger onboarding', () => {
+  assert.equal(shouldOpenOnboardingForDisconnect(''), false);
+  assert.equal(shouldOpenOnboardingForDisconnect('not found'), true);
 });
 
 test('axtree executes directly in the tab instead of using sendMessage', async () => {
@@ -150,4 +158,44 @@ test('inactive tabs are activated before direct script execution', async () => {
     ['get', 11],
     ['update', 11, { active: true }],
   ]);
+});
+
+test('keepalive replies are recognized and ignored by the command path', () => {
+  assert.equal(isKeepAliveResponse({ id: 'keepalive:123', ok: true, result: 'pong' }), true);
+  assert.equal(isKeepAliveResponse({ id: 'c123', ok: true, result: 'pong' }), false);
+  assert.equal(isKeepAliveResponse({ id: 'keepalive:123', ok: false, result: 'pong' }), false);
+});
+
+test('native keepalive posts ping frames on its interval', () => {
+  const sent = [];
+  const intervals = [];
+  const cleared = [];
+  const port = {
+    postMessage(message) {
+      sent.push(message);
+    },
+  };
+
+  const stop = startNativeKeepAlive(port, {
+    setInterval(callback, delay) {
+      intervals.push({ callback, delay });
+      return 'timer-1';
+    },
+    clearInterval(timer) {
+      cleared.push(timer);
+    },
+  });
+
+  assert.equal(intervals.length, 1);
+  assert.equal(intervals[0].delay > 0, true);
+
+  intervals[0].callback();
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'ping');
+  assert.match(sent[0].id, /^keepalive:/);
+
+  stop();
+
+  assert.deepEqual(cleared, ['timer-1']);
 });

@@ -12,7 +12,16 @@ function log(...args) {
   try { fs.appendFileSync(LOGFILE, line); } catch {}
 }
 
-module.exports = ({ inputFd = protocol.STDIN_FD, outputFd = protocol.STDOUT_FD } = {}) => {
+function removePortFile(fsApi = fs) {
+  if (!fsApi.existsSync(PORTFILE)) {
+    return;
+  }
+
+  fsApi.unlinkSync(PORTFILE);
+  log('removed port file', PORTFILE);
+}
+
+function startServer({ inputFd = protocol.STDIN_FD, outputFd = protocol.STDOUT_FD } = {}) {
   log('server started, pid', process.pid);
 
   const pending = new Map();
@@ -47,7 +56,10 @@ module.exports = ({ inputFd = protocol.STDIN_FD, outputFd = protocol.STDOUT_FD }
     },
     () => {
       log('stdin eof');
-      wss.close(() => process.exit(0));
+      wss.close(() => {
+        removePortFile();
+        process.exit(0);
+      });
     },
   );
 
@@ -90,4 +102,7 @@ module.exports = ({ inputFd = protocol.STDIN_FD, outputFd = protocol.STDOUT_FD }
       resolve(port);
     });
   });
-};
+}
+
+module.exports = startServer;
+module.exports.removePortFile = removePortFile;

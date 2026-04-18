@@ -82,6 +82,24 @@ function readFrame(stream, timeoutMs) {
   });
 }
 
+function waitForFile(filePath, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (fs.existsSync(filePath)) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        clearInterval(timer);
+        reject(new Error(`Timed out waiting for file ${filePath}`));
+      }
+    }, 25);
+  });
+}
+
 test('protocol reader stays alive until the first delayed native message arrives', async t => {
   const child = spawn(process.execPath, ['-e', `
     const protocol = require('./src/protocol');
@@ -178,4 +196,34 @@ test('compiled Bun protocol reader stays alive until the first delayed native me
   const exit = await waitForExit(child, 2000);
   assert.equal(exit.signal, null);
   assert.equal(exit.code, 0);
+});
+
+test('native host removes the port file when stdin closes', async t => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'zen-bridge-home-'));
+  const portFilePath = path.join(tempHome, '.zen-bridge-port');
+  const child = spawn(process.execPath, [path.join(__dirname, 'src/host.js')], {
+    cwd: __dirname,
+    env: {
+      ...process.env,
+      HOME: tempHome,
+    },
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+
+  t.after(() => {
+    if (child.exitCode === null) {
+      child.kill('SIGKILL');
+    }
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  await waitForFile(portFilePath, 2000);
+  assert.equal(fs.existsSync(portFilePath), true);
+
+  child.stdin.end();
+
+  const exit = await waitForExit(child, 2000);
+  assert.equal(exit.signal, null);
+  assert.equal(exit.code, 0);
+  assert.equal(fs.existsSync(portFilePath), false);
 });

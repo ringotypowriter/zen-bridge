@@ -1,8 +1,10 @@
 let PORT = null;
 let ONBOARDING_OPENED = false;
 let CONNECT_ATTEMPTS = 0;
+let STOP_NATIVE_KEEPALIVE = null;
 const CONTENT_SCRIPT_FILES = ['axtree.js', 'content.js'];
 const RECEIVING_END_MISSING = 'Could not establish connection. Receiving end does not exist.';
+const NATIVE_KEEPALIVE_INTERVAL_MS = 30_000;
 
 function normalizeTabMessageError(error) {
   const message = error?.message || String(error);
@@ -16,6 +18,44 @@ function normalizeTabMessageError(error) {
 
 function toErrorResponse(error) {
   return { ok: false, error: normalizeTabMessageError(error) };
+}
+
+function createKeepAliveMessage(now = Date.now) {
+  return {
+    id: `keepalive:${now()}`,
+    action: 'ping',
+  };
+}
+
+function isKeepAliveResponse(message) {
+  return typeof message?.id === 'string'
+    && message.id.startsWith('keepalive:')
+    && message.ok === true
+    && message.result === 'pong';
+}
+
+function startNativeKeepAlive(port, timerApi = globalThis) {
+  const timer = timerApi.setInterval(() => {
+    const message = createKeepAliveMessage();
+
+    try {
+      port.postMessage(message);
+      console.log('[zen-bridge] keepalive ping sent');
+    } catch (error) {
+      console.error('[zen-bridge] keepalive ping failed:', error.message);
+    }
+  }, NATIVE_KEEPALIVE_INTERVAL_MS);
+
+  return () => {
+    timerApi.clearInterval(timer);
+  };
+}
+
+function shouldOpenOnboardingForDisconnect(message) {
+  return message.includes('not found')
+    || message.includes('No such')
+    || message.includes('does not exist')
+    || message.includes('could not start');
 }
 
 function injectContentScripts(tabsApi, tabId) {
@@ -141,6 +181,12 @@ function connect() {
 
   PORT.onMessage.addListener(msg => {
     console.log('[zen-bridge] NM msg received:', JSON.stringify(msg));
+
+    if (isKeepAliveResponse(msg)) {
+      console.log('[zen-bridge] keepalive pong received');
+      return;
+    }
+
     const reply = o => {
       try {
         PORT.postMessage({ id: msg.id, ...o });
@@ -186,8 +232,12 @@ function connect() {
     console.error('[zen-bridge] disconnected. lastError:', JSON.stringify(err), 'message:', msg);
     console.error('[zen-bridge] disconnect stack:', new Error().stack);
     PORT = null;
+    if (STOP_NATIVE_KEEPALIVE) {
+      STOP_NATIVE_KEEPALIVE();
+      STOP_NATIVE_KEEPALIVE = null;
+    }
 
-    if (msg.includes('not found') || msg.includes('No such') || msg.includes('does not exist') || msg.includes('could not start') || CONNECT_ATTEMPTS === 1) {
+    if (shouldOpenOnboardingForDisconnect(msg)) {
       console.log('[zen-bridge] host not installed, opening onboarding');
       maybeOpenOnboarding();
       return;
@@ -198,6 +248,7 @@ function connect() {
   });
 
   console.log('[zen-bridge] listeners attached');
+  STOP_NATIVE_KEEPALIVE = startNativeKeepAlive(PORT);
 }
 
 function maybeOpenOnboarding() {
@@ -224,8 +275,11 @@ if (typeof module !== 'undefined') {
     executeAXTree,
     injectAXTreeScript,
     injectContentScripts,
+    isKeepAliveResponse,
     normalizeTabMessageError,
     relayTabMessage,
+    startNativeKeepAlive,
+    shouldOpenOnboardingForDisconnect,
     toErrorResponse,
   };
 } else {

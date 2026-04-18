@@ -23,6 +23,9 @@ log('startup');
 
 try {
   const server = require('./server');
+  process.on('exit', () => {
+    server.removePortFile();
+  });
   server({ inputFd: 0, outputFd: 1 }).then(port => {
     log('ready on port', port);
   }).catch(e => {
