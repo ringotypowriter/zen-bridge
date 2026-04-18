@@ -27,6 +27,8 @@ module.exports = (nativeIn, nativeOut) => {
     if (ws?.readyState === 1) {
       ws.send(JSON.stringify(msg));
       pending.delete(msg.id);
+    } else if (msg.action === 'ping') {
+      protocol.write(nativeOut, { id: msg.id, ok: true, result: 'pong' });
     } else {
       clients.forEach(c => c.readyState === 1 && c.send(JSON.stringify(msg)));
     }

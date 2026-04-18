@@ -75,6 +75,12 @@ function probe() {
   }
 }
 
+browser.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.action === 'status') {
+    return Promise.resolve({ connected: !!PORT });
+  }
+});
+
 browser.runtime.onInstalled.addListener(probe);
 browser.runtime.onStartup.addListener(probe);
 probe();

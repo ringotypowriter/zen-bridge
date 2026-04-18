@@ -5,8 +5,11 @@ function setStatus(text, cls) {
 }
 
 function check() {
-  browser.runtime.sendNativeMessage('zen_bridge', { id: 'ping', action: 'ping' })
-    .then(() => setStatus('Connected! You can close this tab.', 'ok'))
+  browser.runtime.sendMessage({ action: 'status' })
+    .then(res => {
+      if (res?.connected) setStatus('Connected! You can close this tab.', 'ok');
+      else setStatus('Not connected yet. Run the command above and refresh this page.', 'err');
+    })
     .catch(() => setStatus('Not connected yet. Run the command above and refresh this page.', 'err'));
 }
 
