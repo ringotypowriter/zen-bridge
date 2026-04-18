@@ -186,14 +186,17 @@ test('native keepalive posts ping frames on its interval', () => {
     },
   });
 
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].action, 'ping');
+  assert.match(sent[0].id, /^keepalive:/);
   assert.equal(intervals.length, 1);
   assert.equal(intervals[0].delay > 0, true);
 
   intervals[0].callback();
 
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].action, 'ping');
-  assert.match(sent[0].id, /^keepalive:/);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].action, 'ping');
+  assert.match(sent[1].id, /^keepalive:/);
 
   stop();
 

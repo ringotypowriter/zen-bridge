@@ -4,7 +4,7 @@ let CONNECT_ATTEMPTS = 0;
 let STOP_NATIVE_KEEPALIVE = null;
 const CONTENT_SCRIPT_FILES = ['axtree.js', 'content.js'];
 const RECEIVING_END_MISSING = 'Could not establish connection. Receiving end does not exist.';
-const NATIVE_KEEPALIVE_INTERVAL_MS = 30_000;
+const NATIVE_KEEPALIVE_INTERVAL_MS = 5_000;
 
 function normalizeTabMessageError(error) {
   const message = error?.message || String(error);
@@ -35,7 +35,7 @@ function isKeepAliveResponse(message) {
 }
 
 function startNativeKeepAlive(port, timerApi = globalThis) {
-  const timer = timerApi.setInterval(() => {
+  const sendKeepAlive = () => {
     const message = createKeepAliveMessage();
 
     try {
@@ -44,7 +44,10 @@ function startNativeKeepAlive(port, timerApi = globalThis) {
     } catch (error) {
       console.error('[zen-bridge] keepalive ping failed:', error.message);
     }
-  }, NATIVE_KEEPALIVE_INTERVAL_MS);
+  };
+
+  sendKeepAlive();
+  const timer = timerApi.setInterval(sendKeepAlive, NATIVE_KEEPALIVE_INTERVAL_MS);
 
   return () => {
     timerApi.clearInterval(timer);
