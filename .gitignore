@@ -1,0 +1,19 @@
+node_modules/
+package-lock.json
+
+# Runtime artifacts
+.zen-bridge-port
+.zen-bridge.log
+
+# Generated at install time
+extension/server/bin/zen-bridge-host
+
+# Workspace metadata
+.yachiyo/
+
+# OS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/

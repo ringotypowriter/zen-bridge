@@ -1,0 +1,12 @@
+{
+  "name": "zen-bridge-server",
+  "version": "1.0.0",
+  "description": "Native Messaging → WebSocket bridge for Zen Bridge",
+  "scripts": {
+    "install-host": "node install.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "license": "MIT"
+}

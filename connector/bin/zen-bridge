@@ -1,0 +1,101 @@
+#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const PORTFILE = path.join(os.homedir(), '.zen-bridge-port');
+
+function usage() {
+  console.log(`Usage: zen-bridge <action> [options]
+
+Actions:
+  tabs                          List all tabs
+  axtree    --tab <id>          Get accessible tree
+  click     --tab <id> --ref <r>  Click element by ref
+  scroll    --tab <id> --x <n> --y <n>
+  scroll-into-view --tab <id> --ref <r>
+  screenshot --tab <id>         Capture visible tab (base64)
+  runjs     --tab <id> --code <js>
+
+Options:
+  -j, --json    Output raw JSON
+`);
+  process.exit(1);
+}
+
+function getPort() {
+  if (!fs.existsSync(PORTFILE)) { console.error('No port file. Is Zen running with the extension?'); process.exit(1); }
+  return fs.readFileSync(PORTFILE, 'utf8').trim();
+}
+
+function wsSend(action, payload = {}) {
+  return new Promise((res, rej) => {
+    const WebSocket = require('ws');
+    const ws = new WebSocket('ws://localhost:' + getPort());
+    const id = 'c' + Date.now();
+    const timer = setTimeout(() => { ws.close(); rej(new Error('timeout')); }, 5000);
+    ws.on('open', () => ws.send(JSON.stringify({ id, action, ...payload })));
+    ws.on('message', d => { clearTimeout(timer); ws.close(); res(JSON.parse(d)); });
+    ws.on('error', e => { clearTimeout(timer); rej(e); });
+  });
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  if (args.length === 0) usage();
+
+  const action = args[0];
+  const flags = {};
+  for (let i = 1; i < args.length; i++) {
+    if (args[i].startsWith('--')) flags[args[i].slice(2)] = args[++i];
+    else if (args[i] === '-j' || args[i] === '--json') flags.json = true;
+  }
+
+  let res;
+  switch (action) {
+    case 'tabs':
+      res = await wsSend('tabs');
+      break;
+    case 'axtree':
+      if (!flags.tab) usage();
+      res = await wsSend('axtree', { tabId: +flags.tab });
+      break;
+    case 'click':
+      if (!flags.tab || !flags.ref) usage();
+      res = await wsSend('click', { tabId: +flags.tab, payload: { ref: flags.ref } });
+      break;
+    case 'scroll':
+      if (!flags.tab) usage();
+      res = await wsSend('scroll', { tabId: +flags.tab, payload: { x: +(flags.x||0), y: +(flags.y||0) } });
+      break;
+    case 'scroll-into-view':
+      if (!flags.tab || !flags.ref) usage();
+      res = await wsSend('scrollIntoView', { tabId: +flags.tab, payload: { ref: flags.ref } });
+      break;
+    case 'screenshot':
+      if (!flags.tab) usage();
+      res = await wsSend('screenshot', { tabId: +flags.tab });
+      if (res.ok) {
+        const m = res.result.match(/^data:image\/\w+;base64,(.+)/);
+        if (m) {
+          const buf = Buffer.from(m[1], 'base64');
+          const out = flags.output || path.join(os.tmpdir(), `zen-bridge-${Date.now()}.png`);
+          fs.writeFileSync(out, buf);
+          res.result = out;
+        }
+      }
+      break;
+    case 'runjs':
+      if (!flags.tab || !flags.code) usage();
+      res = await wsSend('runjs', { tabId: +flags.tab, payload: { code: flags.code } });
+      break;
+    default:
+      usage();
+  }
+
+  if (flags.json) { console.log(JSON.stringify(res, null, 2)); }
+  else if (res.ok) { console.log(res.result); }
+  else { console.error('Error:', res.error); process.exit(1); }
+}
+
+main().catch(e => { console.error(e.message); process.exit(1); });

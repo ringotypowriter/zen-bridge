@@ -1,0 +1,12 @@
+{
+  "name": "zen-bridge-connector",
+  "version": "1.0.0",
+  "description": "CLI and WebSocket client for Zen Bridge",
+  "bin": {
+    "zen-bridge": "bin/zen-bridge"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "license": "MIT"
+}
