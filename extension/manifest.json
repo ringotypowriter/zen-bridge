@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zen Bridge",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Bridge Zen Browser to external tools via Native Messaging and WebSocket.",
   "background": {
     "scripts": ["background.js"],
@@ -16,15 +16,11 @@
     }
   ],
   "permissions": ["tabs", "activeTab", "<all_urls>", "nativeMessaging", "downloads"],
-  "web_accessible_resources": [
-    {
-      "resources": ["onboarding.html", "onboarding.js"],
-      "matches": ["<all_urls>"]
-    }
-  ],
+  "web_accessible_resources": ["onboarding.html", "onboarding.js"],
   "browser_specific_settings": {
     "gecko": {
-      "id": "zen-bridge@yachiyo.local"
+      "id": "zen-bridge@yachiyo.local",
+      "data_collection_permissions": []
     }
   }
 }
