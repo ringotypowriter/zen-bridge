@@ -12,12 +12,13 @@ Zen Bridge is a three-piece system:
 
 ### 1. Install the browser extension
 
-Open Zen → `about:debugging` → *This Zen* → *Load Temporary Add-on* → select `extension/manifest.json`.
+Download the latest signed `.xpi` from [GitHub Releases](https://github.com/ringotypowriter/zen-bridge/releases) and drag it into Zen. Or install from [AMO](https://addons.mozilla.org/) once listed.
 
 ### 2. Register the Native Messaging host
 
 ```bash
-cd extension/server
+git clone https://github.com/ringotypowriter/zen-bridge.git
+cd zen-bridge/extension/server
 npm install
 node install.js
 ```

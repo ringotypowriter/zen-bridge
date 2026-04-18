@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install extension deps
+        run: |
+          cd extension
+          npm install
+
+      - name: Sign with AMO
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          cd extension
+          npx web-ext sign
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zen-bridge-xpi
+          path: extension/web-ext-artifacts/*.xpi
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: extension/web-ext-artifacts/*.xpi
+          generate_release_notes: true

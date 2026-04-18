@@ -1,0 +1,13 @@
+{
+  "name": "zen-bridge-extension",
+  "version": "1.0.0",
+  "description": "Zen Bridge Firefox extension",
+  "scripts": {
+    "build": "web-ext build",
+    "sign": "web-ext sign",
+    "run": "web-ext run"
+  },
+  "devDependencies": {
+    "web-ext": "^8.0.0"
+  }
+}
