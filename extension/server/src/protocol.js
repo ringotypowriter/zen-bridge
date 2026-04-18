@@ -1,27 +1,70 @@
 const fs = require('fs');
 
-const read = (stream, cb) => {
-  let buf = Buffer.alloc(0), want = 4;
-  stream.on('data', d => {
-    const chunk = Buffer.isBuffer(d) ? d : Buffer.from(d);
-    buf = Buffer.concat([buf, chunk]);
-    while (buf.length >= want) {
-      if (want === 4) { want = buf.readUInt32LE(0) + 4; if (want === 4) continue; }
-      if (buf.length >= want) { cb(JSON.parse(buf.slice(4, want).toString())); buf = buf.slice(want); want = 4; }
-      else break;
+const STDIN_FD = 0;
+const STDOUT_FD = 1;
+const READ_BUFFER_SIZE = 64 * 1024;
+
+function read(inputFd, onMessage, onClose) {
+  let frameBuffer = Buffer.alloc(0);
+  const readBuffer = Buffer.allocUnsafe(READ_BUFFER_SIZE);
+
+  function drainFrames() {
+    while (frameBuffer.length >= 4) {
+      const bodyLength = frameBuffer.readUInt32LE(0);
+      const frameLength = bodyLength + 4;
+
+      if (frameBuffer.length < frameLength) {
+        return;
+      }
+
+      const json = frameBuffer.subarray(4, frameLength).toString('utf8');
+      frameBuffer = frameBuffer.subarray(frameLength);
+      onMessage(JSON.parse(json));
     }
-  });
-};
-
-const write = (stream, msg) => {
-  const b = Buffer.from(JSON.stringify(msg));
-  const h = Buffer.allocUnsafe(4); h.writeUInt32LE(b.length, 0);
-  const buf = Buffer.concat([h, b]);
-  if (stream.fd != null) {
-    fs.writeSync(stream.fd, buf);
-  } else {
-    stream.write(buf);
   }
-};
 
-module.exports = { read, write };
+  function pump() {
+    fs.read(inputFd, readBuffer, 0, readBuffer.length, null, (error, bytesRead) => {
+      if (error) {
+        if (error.code === 'EINTR') {
+          setImmediate(pump);
+          return;
+        }
+        throw error;
+      }
+
+      if (bytesRead === 0) {
+        if (onClose) {
+          onClose();
+        }
+        return;
+      }
+
+      frameBuffer = Buffer.concat([
+        frameBuffer,
+        Buffer.from(readBuffer.subarray(0, bytesRead)),
+      ]);
+
+      drainFrames();
+      setImmediate(pump);
+    });
+  }
+
+  pump();
+}
+
+function write(outputFd, msg) {
+  const body = Buffer.from(JSON.stringify(msg));
+  const header = Buffer.allocUnsafe(4);
+
+  header.writeUInt32LE(body.length, 0);
+  fs.writeSync(outputFd, header);
+  fs.writeSync(outputFd, body);
+}
+
+module.exports = {
+  read,
+  write,
+  STDIN_FD,
+  STDOUT_FD,
+};

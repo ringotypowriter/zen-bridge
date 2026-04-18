@@ -38,6 +38,11 @@ fi
 
 mv "${INSTALL_DIR}/.zen-bridge-server.tmp" "${INSTALL_DIR}/zen-bridge-server"
 
+# Remove macOS quarantine/gatekeeper attributes
+if [ "$(uname -s)" = "Darwin" ]; then
+  xattr -dr com.apple.quarantine "${INSTALL_DIR}/zen-bridge-server" 2>/dev/null || true
+fi
+
 # Install host manifest
 MANIFEST_NAME="zen_bridge.json"
 MANIFEST_DIR_MACOS="${HOME}/Library/Application Support/Mozilla/NativeMessagingHosts"
