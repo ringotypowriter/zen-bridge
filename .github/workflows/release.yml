@@ -9,6 +9,8 @@ on:
 jobs:
   sign:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -33,11 +35,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zen-bridge-xpi
-          path: extension/web-ext-artifacts/*.xpi
+          path: extension/dist/*.xpi
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: extension/web-ext-artifacts/*.xpi
+          files: extension/dist/*.xpi
           generate_release_notes: true
