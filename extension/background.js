@@ -2,6 +2,7 @@ let PORT = null;
 let ONBOARDING_OPENED = false;
 
 function connect() {
+  if (PORT) return;
   PORT = browser.runtime.connectNative('zen_bridge');
   console.log('[zen-bridge] connected');
 
@@ -58,11 +59,16 @@ function openOnboarding() {
 function probe() {
   try {
     const p = browser.runtime.connectNative('zen_bridge');
+    let alive = true;
     p.onDisconnect.addListener(() => {
+      alive = false;
       openOnboarding();
     });
     setTimeout(() => {
-      if (p) { p.disconnect(); connect(); }
+      if (alive) {
+        p.disconnect();
+        connect();
+      }
     }, 500);
   } catch (e) {
     openOnboarding();

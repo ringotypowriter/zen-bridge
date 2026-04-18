@@ -10,6 +10,10 @@ process.on('uncaughtException', e => { log('uncaught:', e.stack || e.message); p
 process.on('unhandledRejection', e => { log('unhandled:', e.stack || e.message); });
 process.on('exit', c => log('exit code', c));
 
+// Keep stdin alive for Native Messaging pipe
+process.stdin.resume();
+process.stdin.setEncoding(null);
+
 log('startup');
 
 try {
