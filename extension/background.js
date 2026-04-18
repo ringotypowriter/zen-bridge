@@ -1,4 +1,5 @@
 let PORT = null;
+let ONBOARDING_OPENED = false;
 
 function connect() {
   PORT = chrome.runtime.connectNative('zen_bridge');
@@ -33,8 +34,30 @@ function connect() {
   PORT.onDisconnect.addListener(() => {
     console.error('[zen-bridge] disconnected:', chrome.runtime.lastError?.message);
     PORT = null;
-    setTimeout(connect, 1000);
+    setTimeout(connect, 2000);
   });
 }
 
-connect();
+function openOnboarding() {
+  if (ONBOARDING_OPENED) return;
+  ONBOARDING_OPENED = true;
+  chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+}
+
+function probe() {
+  try {
+    const p = chrome.runtime.connectNative('zen_bridge');
+    p.onDisconnect.addListener(() => {
+      openOnboarding();
+    });
+    setTimeout(() => {
+      if (p) { p.disconnect(); connect(); }
+    }, 500);
+  } catch (e) {
+    openOnboarding();
+  }
+}
+
+chrome.runtime.onInstalled.addListener(probe);
+chrome.runtime.onStartup.addListener(probe);
+probe();

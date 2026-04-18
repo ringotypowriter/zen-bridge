@@ -15,7 +15,8 @@
       "all_frames": false
     }
   ],
-  "permissions": ["tabs", "activeTab", "<all_urls>", "nativeMessaging"],
+  "permissions": ["tabs", "activeTab", "<all_urls>", "nativeMessaging", "downloads"],
+  "web_accessible_resources": ["onboarding.html", "onboarding.js"],
   "browser_specific_settings": {
     "gecko": {
       "id": "zen-bridge@yachiyo.local"

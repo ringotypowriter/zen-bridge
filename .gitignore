@@ -7,6 +7,7 @@ package-lock.json
 
 # Generated at install time
 extension/server/bin/zen-bridge-host
+extension/server/dist/
 extension/dist/
 extension/.amo-upload-uuid
 

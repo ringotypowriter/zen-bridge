@@ -2,11 +2,19 @@
   "name": "zen-bridge-server",
   "version": "1.0.0",
   "description": "Native Messaging → WebSocket bridge for Zen Bridge",
+  "bin": "src/host.js",
   "scripts": {
-    "install-host": "node install.js"
+    "install-host": "node install.js",
+    "build": "pkg . --targets node18-macos-arm64,node18-macos-x64,node18-linux-x64 --out-path dist"
   },
   "dependencies": {
     "ws": "^8.16.0"
   },
-  "license": "MIT"
+  "pkg": {
+    "scripts": ["src/server.js", "src/protocol.js", "src/host.js"]
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
 }
