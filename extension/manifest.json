@@ -1,11 +1,11 @@
 {
   "manifest_version": 2,
   "name": "Zen Bridge",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Bridge Zen Browser to external tools via Native Messaging and WebSocket.",
   "background": {
     "scripts": ["background.js"],
-    "persistent": false
+    "persistent": true
   },
   "content_scripts": [
     {
