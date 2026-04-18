@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const read = (stream, cb) => {
   let buf = Buffer.alloc(0), want = 4;
   stream.on('data', d => {
@@ -14,7 +16,12 @@ const read = (stream, cb) => {
 const write = (stream, msg) => {
   const b = Buffer.from(JSON.stringify(msg));
   const h = Buffer.allocUnsafe(4); h.writeUInt32LE(b.length, 0);
-  stream.write(Buffer.concat([h, b]));
+  const buf = Buffer.concat([h, b]);
+  if (stream.fd != null) {
+    fs.writeSync(stream.fd, buf);
+  } else {
+    stream.write(buf);
+  }
 };
 
 module.exports = { read, write };
