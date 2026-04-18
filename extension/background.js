@@ -1,9 +1,18 @@
 let PORT = null;
 let ONBOARDING_OPENED = false;
+let CONNECT_ATTEMPTS = 0;
 
 function connect() {
   if (PORT) return;
-  PORT = browser.runtime.connectNative('zen_bridge');
+  try {
+    PORT = browser.runtime.connectNative('zen_bridge');
+    CONNECT_ATTEMPTS++;
+  } catch (e) {
+    console.error('[zen-bridge] connectNative threw:', e.message);
+    maybeOpenOnboarding();
+    return;
+  }
+
   console.log('[zen-bridge] connected');
 
   PORT.onMessage.addListener(msg => {
@@ -17,8 +26,8 @@ function connect() {
       return;
     }
     if (msg.action === 'screenshot') {
-      browser.tabs.captureVisibleTab(msg.windowId || browser.windows.WINDOW_ID_CURRENT, { format: 'png' }).then(dataUrl =>
-        reply({ ok: true, result: dataUrl }),
+      browser.tabs.captureVisibleTab(msg.windowId || browser.windows.WINDOW_ID_CURRENT, { format: 'png' }).then(
+        dataUrl => reply({ ok: true, result: dataUrl }),
         err => reply({ ok: false, error: err.message })
       );
       return;
@@ -44,35 +53,26 @@ function connect() {
   });
 
   PORT.onDisconnect.addListener(() => {
-    console.error('[zen-bridge] disconnected:', browser.runtime.lastError?.message);
+    const err = browser.runtime.lastError;
+    const msg = err?.message || '';
+    console.error('[zen-bridge] disconnected:', msg);
     PORT = null;
+
+    // Host not installed → open onboarding
+    if (msg.includes('not found') || msg.includes('No such') || msg.includes('does not exist') || msg.includes('could not start') || CONNECT_ATTEMPTS === 1) {
+      maybeOpenOnboarding();
+      return;
+    }
+
+    // Otherwise retry
     setTimeout(connect, 2000);
   });
 }
 
-function openOnboarding() {
+function maybeOpenOnboarding() {
   if (ONBOARDING_OPENED) return;
   ONBOARDING_OPENED = true;
   browser.tabs.create({ url: browser.runtime.getURL('onboarding.html') });
-}
-
-function probe() {
-  try {
-    const p = browser.runtime.connectNative('zen_bridge');
-    let alive = true;
-    p.onDisconnect.addListener(() => {
-      alive = false;
-      openOnboarding();
-    });
-    setTimeout(() => {
-      if (alive) {
-        p.disconnect();
-        connect();
-      }
-    }, 500);
-  } catch (e) {
-    openOnboarding();
-  }
 }
 
 browser.runtime.onMessage.addListener((msg, sender) => {
@@ -81,6 +81,6 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   }
 });
 
-browser.runtime.onInstalled.addListener(probe);
-browser.runtime.onStartup.addListener(probe);
-probe();
+browser.runtime.onInstalled.addListener(connect);
+browser.runtime.onStartup.addListener(connect);
+connect();
