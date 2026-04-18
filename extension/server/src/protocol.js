@@ -2,13 +2,14 @@ const fs = require('fs');
 
 const STDIN_FD = 0;
 const STDOUT_FD = 1;
-const READ_BUFFER_SIZE = 64 * 1024;
+const KEEPALIVE_INTERVAL_MS = 1000;
 
-function read(inputFd, onMessage, onClose) {
+function createFrameReader(onMessage) {
   let frameBuffer = Buffer.alloc(0);
-  const readBuffer = Buffer.allocUnsafe(READ_BUFFER_SIZE);
 
-  function drainFrames() {
+  return chunk => {
+    frameBuffer = Buffer.concat([frameBuffer, Buffer.from(chunk)]);
+
     while (frameBuffer.length >= 4) {
       const bodyLength = frameBuffer.readUInt32LE(0);
       const frameLength = bodyLength + 4;
@@ -21,36 +22,85 @@ function read(inputFd, onMessage, onClose) {
       frameBuffer = frameBuffer.subarray(frameLength);
       onMessage(JSON.parse(json));
     }
-  }
+  };
+}
 
-  function pump() {
-    fs.read(inputFd, readBuffer, 0, readBuffer.length, null, (error, bytesRead) => {
-      if (error) {
-        if (error.code === 'EINTR') {
-          setImmediate(pump);
+function readFromStream(stream, onChunk, onClose) {
+  stream.on('data', chunk => {
+    onChunk(chunk);
+  });
+
+  stream.once('end', () => {
+    if (onClose) {
+      onClose();
+    }
+  });
+
+  stream.once('error', error => {
+    throw error;
+  });
+
+  if (typeof stream.resume === 'function') {
+    stream.resume();
+  }
+}
+
+function readFromNodeStdin(onChunk, onClose) {
+  readFromStream(process.stdin, onChunk, onClose);
+}
+
+function readFromBunStdin(onChunk, onClose) {
+  const keepAlive = setInterval(() => {}, KEEPALIVE_INTERVAL_MS);
+  const reader = Bun.stdin.stream().getReader();
+
+  async function pump() {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) {
+          if (onClose) {
+            onClose();
+          }
           return;
         }
-        throw error;
-      }
 
-      if (bytesRead === 0) {
-        if (onClose) {
-          onClose();
+        if (value && value.length > 0) {
+          onChunk(value);
         }
-        return;
       }
-
-      frameBuffer = Buffer.concat([
-        frameBuffer,
-        Buffer.from(readBuffer.subarray(0, bytesRead)),
-      ]);
-
-      drainFrames();
-      setImmediate(pump);
-    });
+    } finally {
+      clearInterval(keepAlive);
+      reader.releaseLock();
+    }
   }
 
-  pump();
+  pump().catch(error => {
+    throw error;
+  });
+}
+
+function read(inputFd, onMessage, onClose) {
+  const onChunk = createFrameReader(onMessage);
+
+  if (typeof Bun !== 'undefined' && inputFd === STDIN_FD && Bun.stdin?.stream) {
+    readFromBunStdin(onChunk, onClose);
+    return;
+  }
+
+  if (inputFd === STDIN_FD && process.stdin?.fd === STDIN_FD) {
+    readFromNodeStdin(onChunk, onClose);
+    return;
+  }
+
+  readFromStream(
+    fs.createReadStream(null, {
+      fd: inputFd,
+      autoClose: false,
+    }),
+    onChunk,
+    onClose,
+  );
 }
 
 function write(outputFd, msg) {

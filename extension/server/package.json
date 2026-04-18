@@ -4,6 +4,7 @@
   "description": "Native Messaging → WebSocket bridge for Zen Bridge",
   "bin": "src/host.js",
   "scripts": {
+    "test": "node --test",
     "install-host": "node install.js",
     "build": "pkg . --targets node18-macos-arm64,node18-macos-x64,node18-linux-x64 --out-path dist"
   },
