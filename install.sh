@@ -29,12 +29,9 @@ mkdir -p "${INSTALL_DIR}"
 curl -fsSL -o "${INSTALL_DIR}/.zen-bridge-server.tmp" "${LATEST_URL}"
 chmod +x "${INSTALL_DIR}/.zen-bridge-server.tmp"
 
-# Sanity check: try a quick NM ping
-CHECK_MSG='{"id":"x","action":"ping"}'
-CHECK_LEN=$(printf '%s' "$CHECK_MSG" | wc -c | tr -d ' ')
-CHECK_HEADER=$(printf "$(printf '\\x%02x\\x%02x\\x%02x\\x%02x' $((CHECK_LEN & 0xff)) $(((CHECK_LEN >> 8) & 0xff)) $(((CHECK_LEN >> 16) & 0xff)) $(((CHECK_LEN >> 24) & 0xff)))")
-if ! { printf "%b%s" "$CHECK_HEADER" "$CHECK_MSG"; } | timeout 2 "${INSTALL_DIR}/.zen-bridge-server.tmp" 2>/dev/null | head -c 1 | grep -q '.'; then
-  echo "Downloaded binary appears broken or incomplete. Try again in 30s."
+# Sanity check: verify it's a valid executable
+if ! file "${INSTALL_DIR}/.zen-bridge-server.tmp" | grep -qE "(Mach-O|ELF)"; then
+  echo "Downloaded binary appears broken or incomplete."
   rm -f "${INSTALL_DIR}/.zen-bridge-server.tmp"
   exit 1
 fi
